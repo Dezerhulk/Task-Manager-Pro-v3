@@ -7,6 +7,35 @@ from enum import Enum
 from pydantic import BaseModel, Field, field_validator
 
 
+# Authentication schemas
+class RegisterRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    email: str
+    password: str = Field(..., min_length=8, max_length=100)
+
+    model_config = {"extra": "forbid"}
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v):
+        if not v.replace("_", "").replace("-", "").isalnum():
+            raise ValueError("Username must be alphanumeric")
+        return v
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str = Field(..., min_length=8, max_length=100)
+
+    model_config = {"extra": "forbid"}
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+    model_config = {"extra": "forbid"}
+
+
 # Enums
 class UserRoleEnum(str, Enum):
     admin = "admin"

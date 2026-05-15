@@ -8,9 +8,6 @@ from sqlalchemy.pool import StaticPool
 
 from app.main_pro import app
 from app.database_pro import Base, get_db
-from app.models_pro import User
-from app.auth import hash_password
-from app.schemas_pro import UserCreate
 
 # Setup in-memory test database
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
@@ -83,6 +80,20 @@ def test_register_duplicate_email():
     assert "already registered" in response.json()["detail"]
 
 
+def test_register_cannot_set_admin_role():
+    """Public registration should not allow role escalation."""
+    response = client.post(
+        "/api/auth/register",
+        json={
+            "username": "baduser",
+            "email": "baduser@example.com",
+            "password": "securepassword123",
+            "role": "admin",
+        },
+    )
+    assert response.status_code == 422
+
+
 def test_login_success():
     """Test successful login."""
     # Create user
@@ -98,7 +109,7 @@ def test_login_success():
     # Login
     response = client.post(
         "/api/auth/login",
-        params={"email": "test@example.com", "password": "securepassword123"},
+        json={"email": "test@example.com", "password": "securepassword123"},
     )
     assert response.status_code == 200
     data = response.json()
@@ -122,7 +133,7 @@ def test_login_invalid_credentials():
     # Login with wrong password
     response = client.post(
         "/api/auth/login",
-        params={"email": "test@example.com", "password": "wrongpassword"},
+        json={"email": "test@example.com", "password": "wrongpassword"},
     )
     assert response.status_code == 401
     assert "Invalid email or password" in response.json()["detail"]
@@ -142,23 +153,48 @@ def test_refresh_token():
 
     login_response = client.post(
         "/api/auth/login",
-        params={"email": "test@example.com", "password": "securepassword123"},
+        json={"email": "test@example.com", "password": "securepassword123"},
     )
     refresh_token = login_response.json()["refresh_token"]
 
     # Refresh
     response = client.post(
         "/api/auth/refresh",
-        params={"refresh_token": refresh_token},
+        json={"refresh_token": refresh_token},
     )
     assert response.status_code == 200
     data = response.json()
     assert "access_token" in data
     assert "refresh_token" in data
 
+    old_refresh_response = client.post(
+        "/api/auth/refresh",
+        json={"refresh_token": refresh_token},
+    )
+    assert old_refresh_response.status_code == 401
+
 
 def test_logout():
     """Test logout endpoint."""
-    response = client.post("/api/auth/logout")
+    client.post(
+        "/api/auth/register",
+        json={
+            "username": "testuser",
+            "email": "test@example.com",
+            "password": "securepassword123",
+        },
+    )
+
+    login_response = client.post(
+        "/api/auth/login",
+        json={"email": "test@example.com", "password": "securepassword123"},
+    )
+    tokens = login_response.json()
+
+    response = client.post(
+        "/api/auth/logout",
+        json={"refresh_token": tokens["refresh_token"]},
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+    )
     assert response.status_code == 200
     assert "Logged out" in response.json()["message"]

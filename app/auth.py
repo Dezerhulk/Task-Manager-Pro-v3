@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta
 from typing import Optional
+from uuid import uuid4
 from jose import JWTError, jwt
 import bcrypt
 from fastapi import Depends, HTTPException, status
@@ -56,19 +57,37 @@ def create_access_token(user_id: int, expires_delta: Optional[timedelta] = None)
     return encoded_jwt
 
 
-def create_refresh_token(user_id: int) -> str:
-    """Create JWT refresh token."""
+def create_refresh_token(user_id: int) -> tuple[str, str]:
+    """Create JWT refresh token and return token with JTI."""
     expire = datetime.utcnow() + settings.refresh_token_expire
+    jti = str(uuid4())
     payload = {
         "sub": str(user_id),
         "exp": expire,
         "type": "refresh",
+        "jti": jti,
     }
 
     encoded_jwt = jwt.encode(
         payload, settings.secret_key, algorithm=settings.algorithm
     )
-    return encoded_jwt
+    return encoded_jwt, jti
+
+
+def verify_refresh_token(token: str) -> Optional[tuple[int, str]]:
+    """Verify refresh token and return user_id plus token identifier."""
+    try:
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        user_id = int(payload.get("sub"))
+        token_type_claim = payload.get("type", "access")
+        if token_type_claim != "refresh":
+            return None
+        jti = payload.get("jti")
+        if not jti:
+            return None
+        return user_id, jti
+    except (JWTError, ValueError):
+        return None
 
 
 def verify_token(token: str, token_type: str = "access") -> Optional[int]:

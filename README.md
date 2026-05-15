@@ -1,6 +1,6 @@
 # Task Manager Pro v3.0
 
-*** with FastAPI, JWT Authentication, SQLAlchemy, PostgreSQL/SQLite, and comprehenAdvanced Task Management System*sive security features.
+A FastAPI task management API with JWT authentication, SQLAlchemy persistence, role-based authorization, refresh token rotation, and production-safe configuration.
 
 ## 🎯 Features
 
@@ -147,7 +147,11 @@ POST /api/auth/register
 
 ### 2. Login
 ```bash
-POST /api/auth/login?email=john@example.com&password=securepassword123
+POST /api/auth/login
+{
+  "email": "john@example.com",
+  "password": "securepassword123"
+}
 Response: {
   "access_token": "eyJ...",
   "refresh_token": "eyJ...",
@@ -157,13 +161,16 @@ Response: {
 
 ### 3. Use Token
 ```bash
-GET /api/users/me
+GET /api/auth/me
 Headers: Authorization: Bearer eyJ...
 ```
 
 ### 4. Refresh Token
 ```bash
-POST /api/auth/refresh?refresh_token=eyJ...
+POST /api/auth/refresh
+{
+  "refresh_token": "eyJ..."
+}
 Response: {
   "access_token": "new_eyJ...",
   "refresh_token": "new_eyJ...",
@@ -183,10 +190,11 @@ POST   /api/auth/logout           # Logout (client discards token)
 
 ### Users
 ```
-GET    /api/users/me              # Get current user profile
-GET    /api/users/{id}            # Get user details (admin only)
-PUT    /api/users/{id}            # Update user (self or admin)
-DELETE /api/users/{id}            # Delete user (admin only)
+POST   /api/users                # Create user (admin only)
+GET    /api/auth/me               # Get current authenticated user profile
+GET    /api/users/{id}            # Get user details (self or admin)
+PUT    /api/users/{id}            # Update user (self)
+DELETE /api/users/{id}            # Delete user (self)
 ```
 
 ### Projects

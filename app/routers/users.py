@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from ..database_pro import get_db
 from ..auth import get_current_user
+from ..models_pro import UserRoleEnum
 from .. import crud_pro
 from ..schemas_pro import (
     UserCreate, UserUpdate, UserResponse, UserDetailResponse,
@@ -16,9 +17,14 @@ router = APIRouter(prefix="/api/users", tags=["Users"])
 @router.post("", response_model=UserResponse)
 async def create_user(
     user_create: UserCreate,
+    current_user: int = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Create a new user."""
+    """Create a new user (admin only)."""
+    current = crud_pro.get_user(db, current_user)
+    if not current or current.role != UserRoleEnum.admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
     try:
         return crud_pro.create_user(db, user_create)
     except ValueError as e:
@@ -35,6 +41,11 @@ async def get_user_detail(
     user = crud_pro.get_user(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    current = crud_pro.get_user(db, current_user)
+    if current_user != user_id and (not current or current.role != UserRoleEnum.admin):
+        raise HTTPException(status_code=403, detail="Access denied")
+
     return user
 
 
@@ -90,5 +101,9 @@ async def get_user_projects(
     db: Session = Depends(get_db)
 ):
     """Get user's projects."""
+    current = crud_pro.get_user(db, current_user)
+    if current_user != user_id and (not current or current.role != UserRoleEnum.admin):
+        raise HTTPException(status_code=403, detail="Access denied")
+
     projects = crud_pro.get_user_projects(db, user_id)
     return projects

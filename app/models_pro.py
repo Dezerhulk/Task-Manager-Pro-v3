@@ -74,6 +74,11 @@ class User(Base):
     owned_projects = relationship("Project", back_populates="owner")
     comments = relationship("Comment", back_populates="user")
     audit_logs = relationship("AuditLog", back_populates="user")
+    refresh_tokens = relationship(
+        "RefreshToken",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
     projects = relationship("Project", secondary=project_members, back_populates="members")
 
     __table_args__ = (
@@ -201,4 +206,23 @@ class AuditLog(Base):
     __table_args__ = (
         Index('idx_audit_logs_entity', 'entity_type', 'created_at'),
         Index('idx_audit_logs_user_action', 'user_id', 'action'),
+    )
+
+
+class RefreshToken(Base):
+    """Refresh token model for rotating and revoking refresh tokens."""
+    __tablename__ = 'refresh_tokens'
+
+    id = Column(Integer, primary_key=True, index=True)
+    jti = Column(String(36), unique=True, nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    is_revoked = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+    user = relationship("User", back_populates="refresh_tokens")
+
+    __table_args__ = (
+        Index('idx_refresh_tokens_user', 'user_id'),
+        Index('idx_refresh_tokens_jti', 'jti'),
     )

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
 import bcrypt
 
-from .models_pro import User, Project, Task, Comment, Tag, AuditLog
+from .models_pro import User, Project, Task, Comment, Tag, AuditLog, RefreshToken, UserRoleEnum
 from .schemas_pro import (
     UserCreate, UserUpdate, ProjectCreate, ProjectUpdate, TaskCreate, TaskUpdate,
     CommentCreate, CommentUpdate, TagCreate, TagUpdate, TaskFilterParams, ProjectFilterParams
@@ -91,6 +91,48 @@ def create_user(db: Session, user_create: UserCreate) -> User:
     )
     
     return db_user
+
+
+def save_refresh_token(db: Session, user_id: int, jti: str, expires_at: datetime) -> RefreshToken:
+    """Persist a refresh token record for rotation and revocation."""
+    db_refresh_token = RefreshToken(
+        user_id=user_id,
+        jti=jti,
+        expires_at=expires_at,
+    )
+    db.add(db_refresh_token)
+    db.commit()
+    db.refresh(db_refresh_token)
+    return db_refresh_token
+
+
+def get_refresh_token(db: Session, jti: str) -> Optional[RefreshToken]:
+    """Get a refresh token record by JTI."""
+    return db.query(RefreshToken).filter(RefreshToken.jti == jti).first()
+
+
+def revoke_refresh_token(db: Session, jti: str) -> bool:
+    """Revoke the refresh token record."""
+    refresh_token = get_refresh_token(db, jti)
+    if not refresh_token or refresh_token.is_revoked:
+        return False
+    refresh_token.is_revoked = True
+    db.commit()
+    return True
+
+
+def revoke_user_refresh_tokens(db: Session, user_id: int) -> int:
+    """Revoke all active refresh tokens for a user."""
+    tokens = db.query(RefreshToken).filter(
+        RefreshToken.user_id == user_id,
+        RefreshToken.is_revoked == False
+    ).all()
+    count = 0
+    for token in tokens:
+        token.is_revoked = True
+        count += 1
+    db.commit()
+    return count
 
 
 def get_user(db: Session, user_id: int) -> Optional[User]:
@@ -432,10 +474,22 @@ def get_project_tasks(db: Session, project_id: int, skip: int = 0, limit: int = 
     return tasks, total
 
 
-def search_tasks(db: Session, params: TaskFilterParams) -> Tuple[List[Task], int]:
+def search_tasks(db: Session, params: TaskFilterParams, current_user_id: Optional[int] = None) -> Tuple[List[Task], int]:
     """Search/filter tasks with advanced filtering."""
     query = db.query(Task).filter(Task.is_deleted == False)
-    
+
+    if current_user_id is not None:
+        user = db.query(User).filter(User.id == current_user_id).first()
+        if not user or user.role != UserRoleEnum.admin:
+            query = query.filter(
+                or_(
+                    Task.creator_id == current_user_id,
+                    Task.assignee_id == current_user_id,
+                    Task.project.has(Project.owner_id == current_user_id),
+                    Task.project.has(Project.members.any(User.id == current_user_id)),
+                )
+            )
+
     if params.project_id:
         query = query.filter(Task.project_id == params.project_id)
     

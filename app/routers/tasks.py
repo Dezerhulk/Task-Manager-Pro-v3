@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from ..database_pro import get_db
 from ..auth import get_current_user
-from ..permissions import check_task_access
+from ..permissions import check_project_access, check_task_access
 from .. import crud_pro
 from ..schemas_pro import (
     TaskCreate, TaskUpdate, TaskResponse, TaskDetailResponse,
@@ -22,6 +22,7 @@ async def create_task(
     db: Session = Depends(get_db)
 ):
     """Create a new task."""
+    await check_project_access(db, task_create.project_id, current_user)
     task = crud_pro.create_task(db, task_create, current_user)
     if not task:
         raise HTTPException(status_code=400, detail="Failed to create task")
@@ -78,7 +79,10 @@ async def search_tasks(
     db: Session = Depends(get_db)
 ):
     """Search/filter tasks."""
-    tasks, _ = crud_pro.search_tasks(db, params)
+    if params.project_id:
+        await check_project_access(db, params.project_id, current_user)
+
+    tasks, _ = crud_pro.search_tasks(db, params, current_user)
     return tasks
 
 

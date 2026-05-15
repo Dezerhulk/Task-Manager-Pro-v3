@@ -1,8 +1,9 @@
 """Configuration management using Pydantic settings."""
 
 from typing import Optional
-from pydantic_settings import BaseSettings
 from datetime import timedelta
+from pydantic import Field, model_validator
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -18,10 +19,16 @@ class Settings(BaseSettings):
     environment: str = "development"
 
     # Security
-    secret_key: str = "your-secret-key-change-in-production"
+    secret_key: str = Field("your-secret-key-change-in-production", env="SECRET_KEY")
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
+
+    @model_validator(mode="after")
+    def validate_secret_key(self):
+        if self.is_production and self.secret_key == "your-secret-key-change-in-production":
+            raise ValueError("SECRET_KEY must be set and cannot use the default placeholder in production")
+        return self
 
     # CORS
     cors_origins: list = ["http://localhost:3000", "http://localhost:8000"]

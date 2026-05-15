@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from ..database_pro import get_db
 from ..auth import get_current_user
+from ..models_pro import UserRoleEnum
 from ..permissions import check_project_access, PermissionError
 from .. import crud_pro
 from ..schemas_pro import (
@@ -58,6 +59,9 @@ async def get_user_projects(
     db: Session = Depends(get_db)
 ):
     """Get specific user's projects."""
+    current = crud_pro.get_user(db, current_user)
+    if current_user != user_id and (not current or current.role != UserRoleEnum.admin):
+        raise HTTPException(status_code=403, detail="Access denied")
     projects = crud_pro.get_user_projects(db, user_id)
     return projects
 
